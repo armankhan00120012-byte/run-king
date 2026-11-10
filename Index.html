@@ -1,0 +1,788 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RUN KING - Jungle Rush</title>
+
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  touch-action: none;
+}
+
+body {
+  background: #061b12;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  background: #087b8b;
+}
+
+#hud {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  right: 15px;
+  display: flex;
+  justify-content: space-between;
+  color: white;
+  font-weight: bold;
+  font-size: 17px;
+  text-shadow: 2px 2px 4px #000;
+  pointer-events: none;
+}
+
+#hud div {
+  background: #0008;
+  padding: 9px 13px;
+  border-radius: 12px;
+}
+
+#menu {
+  position: absolute;
+  inset: 0;
+  background: #00180dcc;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  text-align: center;
+  padding: 20px;
+}
+
+#menu h1 {
+  font-size: 48px;
+  color: #ffe34b;
+  text-shadow: 3px 4px #713b00;
+  margin-bottom: 8px;
+}
+
+#menu p {
+  margin: 8px 0 22px;
+  line-height: 1.6;
+}
+
+#start {
+  background: #ffb900;
+  color: #17230a;
+  border: none;
+  border-radius: 15px;
+  padding: 15px 40px;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+#controls {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  pointer-events: none;
+}
+
+.control {
+  pointer-events: auto;
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  border: 3px solid #ffffffaa;
+  background: #102d24bb;
+  color: white;
+  font-size: 26px;
+  font-weight: bold;
+  box-shadow: 0 4px 8px #0008;
+}
+
+.control:active {
+  background: #e9a900;
+  transform: scale(.92);
+}
+
+#hint {
+  position: absolute;
+  bottom: 95px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 12px;
+  text-shadow: 1px 2px 4px black;
+  pointer-events: none;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <button id="soundBtn" style="
+position:absolute;
+top:75px;
+right:15px;
+z-index:10;
+padding:10px 15px;
+border:2px solid white;
+border-radius:12px;
+background:#102d24;
+color:white;
+font-size:16px;">
+🔊 SOUND ON
+  </button>
+  <div>🏆 <span id="score">0</span></div>
+  <div>🪙 <span id="coins">0</span></div>
+  <div>⚡ <span id="speed">1</span></div>
+</div>
+
+<div id="hint">Swipe or use buttons to move</div>
+
+<div id="controls">
+  <button class="control" id="left">◀</button>
+  <button class="control" id="jump">⬆</button>
+  <button class="control" id="slide">⬇</button>
+  <button class="control" id="right">▶</button>
+</div>
+
+<div id="menu">
+  <h1>RUN KING</h1>
+  <h2>🌴 JUNGLE RUSH 🌊</h2>
+  <p>
+    Jungle road par race karo!<br>
+    Pedon aur jhaadiyon se bacho.<br>
+    Coins collect karo aur apna record todo!
+  </p>
+  <button id="start">▶ PLAY NOW</button>
+  <p id="result"></p>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+  // ===== RUN KING SOUND SYSTEM =====
+
+let audioCtx;
+let soundEnabled = true;
+let engineOsc;
+let engineGain;
+let musicOsc;
+let musicGain;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+}
+
+function tone(freq, duration, type="sine", volume=0.15) {
+  if (!soundEnabled || !audioCtx) return;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(
+    0.001,
+    audioCtx.currentTime + duration
+  );
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function startEngine() {
+  if (!soundEnabled || !audioCtx || engineOsc) return;
+
+  engineOsc = audioCtx.createOscillator();
+  engineGain = audioCtx.createGain();
+
+  engineOsc.type = "sawtooth";
+  engineOsc.frequency.value = 65;
+  engineGain.gain.value = 0.025;
+
+  engineOsc.connect(engineGain);
+  engineGain.connect(audioCtx.destination);
+  engineOsc.start();
+
+  musicOsc = audioCtx.createOscillator();
+  musicGain = audioCtx.createGain();
+
+  musicOsc.type = "triangle";
+  musicOsc.frequency.value = 110;
+  musicGain.gain.value = 0.012;
+
+  musicOsc.connect(musicGain);
+  musicGain.connect(audioCtx.destination);
+  musicOsc.start();
+}
+
+function stopEngine() {
+  if (engineOsc) {
+    engineOsc.stop();
+    engineOsc = null;
+  }
+
+  if (musicOsc) {
+    musicOsc.stop();
+    musicOsc = null;
+  }
+
+  engineGain = null;
+  musicGain = null;
+}
+
+function coinSound() {
+  tone(850,0.12,"sine",0.15);
+  setTimeout(() => tone(1250,0.18,"sine",0.12),100);
+}
+
+function jumpSound() {
+  tone(300,0.2,"sine",0.12);
+}
+
+function slideSound() {
+  tone(180,0.25,"triangle",0.12);
+}
+
+function crashSound() {
+  tone(90,0.5,"sawtooth",0.25);
+  tone(55,0.7,"square",0.15);
+}
+
+function updateEngine() {
+  if (engineOsc && engineGain && soundEnabled && running) {
+    engineOsc.frequency.setTargetAtTime(
+      65 + speed * 35,
+      audioCtx.currentTime,
+      0.1
+    );
+  }
+}
+
+document.getElementById("soundBtn").onclick = function() {
+  soundEnabled = !soundEnabled;
+
+  this.textContent = soundEnabled ? "🔊 SOUND ON" : "🔇 SOUND OFF";
+
+  if (!soundEnabled) {
+    stopEngine();
+  } else if (running) {
+    initAudio();
+    startEngine();
+  }
+};
+
+let W, H, roadW, laneW, roadX;
+
+function resize() {
+  W = canvas.width = window.innerWidth * devicePixelRatio;
+  H = canvas.height = window.innerHeight * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  roadW = W * 0.58;
+  laneW = roadW / 3;
+  roadX = (W - roadW) / 2;
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+let running = false;
+let gameOver = false;
+let score = 0;
+let coins = 0;
+let speed = 1;
+let roadOffset = 0;
+let playerLane = 1;
+let jumpTime = 0;
+let slideTime = 0;
+let spawnTimer = 0;
+let coinTimer = 0;
+
+let obstacles = [];
+let coinItems = [];
+let decorations = [];
+
+const player = {
+  y: 0
+};
+
+function laneCenter(lane) {
+  return roadX + laneW * lane + laneW / 2;
+}
+
+function randomLane() {
+  return Math.floor(Math.random() * 3);
+}
+
+function makeDecorations() {
+  decorations = [];
+  for(let i=0;i<28;i++) {
+    decorations.push({
+      side: Math.random() < .5 ? -1 : 1,
+      y: Math.random() * H,
+      x: Math.random(),
+      type: Math.random() < .5 ? "tree" : "grass",
+      size: 0.7 + Math.random() * .8
+    });
+  }
+}
+
+makeDecorations();
+
+function drawWater() {
+  let wave = roadOffset % 70;
+
+  ctx.fillStyle = "#087c9b";
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = "#4bd2dc66";
+  ctx.lineWidth = 2;
+
+  for(let y=-70+wave;y<H+70;y+=70) {
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.quadraticCurveTo(W*.25,y-15,W*.5,y);
+    ctx.quadraticCurveTo(W*.75,y+15,W,y);
+    ctx.stroke();
+  }
+}
+
+function drawTree(x,y,size) {
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(size,size);
+
+  ctx.fillStyle = "#54351e";
+  ctx.fillRect(-5,5,10,30);
+
+  ctx.fillStyle = "#123e20";
+  ctx.beginPath();
+  ctx.arc(0,0,25,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = "#247b35";
+  ctx.beginPath();
+  ctx.arc(-10,-8,17,0,Math.PI*2);
+  ctx.arc(11,-10,16,0,Math.PI*2);
+  ctx.arc(0,8,17,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = "#55a93d";
+  ctx.beginPath();
+  ctx.arc(-9,-13,7,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawGrass(x,y,size) {
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(size,size);
+
+  ctx.fillStyle = "#1c6c2c";
+  for(let i=0;i<7;i++) {
+    ctx.beginPath();
+    ctx.ellipse(i*5-15,-8,5,18,-.3+i*.08,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#55ad39";
+  ctx.beginPath();
+  ctx.arc(0,-4,10,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawJungle() {
+  decorations.forEach(d=>{
+    let x = d.side < 0
+      ? roadX - 30 - d.x * (W-roadW)/2
+      : roadX + roadW + 30 + d.x * (W-roadW)/2;
+
+    if(d.type === "tree") drawTree(x,d.y,d.size);
+    else drawGrass(x,d.y,d.size);
+  });
+}
+
+function drawRoad() {
+  ctx.fillStyle = "#514b3c";
+  ctx.fillRect(roadX,0,roadW,H);
+
+  ctx.fillStyle = "#77705d";
+  ctx.fillRect(roadX+5,0,roadW-10,H);
+
+  // Road borders
+  ctx.fillStyle = "#e7d9a3";
+  ctx.fillRect(roadX,0,7,H);
+  ctx.fillRect(roadX+roadW-7,0,7,H);
+
+  // Lane markings
+  ctx.strokeStyle = "#f6edc5";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([35,35]);
+  ctx.lineDashOffset = -roadOffset;
+
+  for(let i=1;i<=2;i++) {
+    let x = roadX + laneW*i;
+    ctx.beginPath();
+    ctx.moveTo(x,0);
+    ctx.lineTo(x,H);
+    ctx.stroke();
+  }
+
+  ctx.setLineDash([]);
+}
+
+function drawCar(x,y) {
+  ctx.save();
+  ctx.translate(x,y);
+
+  // Shadow
+  ctx.fillStyle = "#0008";
+  ctx.beginPath();
+  ctx.ellipse(0,8,25,46,0,0,Math.PI*2);
+  ctx.fill();
+
+  // Wheels
+  ctx.fillStyle = "#101010";
+  ctx.fillRect(-25,-32,9,24);
+  ctx.fillRect(16,-32,9,24);
+  ctx.fillRect(-25,18,9,24);
+  ctx.fillRect(16,18,9,24);
+
+  // Body
+  ctx.fillStyle = "#c8171d";
+  ctx.beginPath();
+  ctx.moveTo(-19,40);
+  ctx.lineTo(-23,-25);
+  ctx.quadraticCurveTo(-22,-42,-12,-45);
+  ctx.lineTo(12,-45);
+  ctx.quadraticCurveTo(22,-42,23,-25);
+  ctx.lineTo(19,40);
+  ctx.quadraticCurveTo(0,48,-19,40);
+  ctx.fill();
+
+  // Front glass
+  ctx.fillStyle = "#142d3a";
+  ctx.beginPath();
+  ctx.moveTo(-15,-25);
+  ctx.lineTo(-11,-39);
+  ctx.lineTo(11,-39);
+  ctx.lineTo(15,-25);
+  ctx.closePath();
+  ctx.fill();
+
+  // Rear glass
+  ctx.fillStyle = "#182b37";
+  ctx.fillRect(-15,10,30,15);
+
+  // White racing stripes
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(-8,-42,4,82);
+  ctx.fillRect(4,-42,4,82);
+
+  // Headlights
+  ctx.fillStyle = "#fff5a0";
+  ctx.fillRect(-17,-43,7,5);
+  ctx.fillRect(10,-43,7,5);
+
+  // Spoiler
+  ctx.fillStyle = "#161616";
+  ctx.fillRect(-23,34,46,5);
+
+  ctx.restore();
+}
+
+function drawObstacle(o) {
+  let x = laneCenter(o.lane);
+  let y = o.y;
+
+  if(o.type === "tree") {
+    drawTree(x,y,1.05);
+  } else if(o.type === "bush") {
+    ctx.fillStyle = "#195d27";
+    ctx.beginPath();
+    ctx.arc(x,y,22,0,Math.PI*2);
+    ctx.arc(x-15,y+4,15,0,Math.PI*2);
+    ctx.arc(x+15,y+4,15,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = "#61a53d";
+    ctx.beginPath();
+    ctx.arc(x-8,y-8,7,0,Math.PI*2);
+    ctx.fill();
+  } else {
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(.12);
+    ctx.fillStyle = "#74401d";
+    ctx.fillRect(-29,-9,58,18);
+    ctx.fillStyle = "#b87939";
+    ctx.fillRect(-24,-7,48,4);
+    ctx.restore();
+  }
+}
+
+function drawCoin(c) {
+  let x = laneCenter(c.lane);
+  ctx.fillStyle = "#ffd52d";
+  ctx.beginPath();
+  ctx.arc(x,c.y,12,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#fff4a2";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x,c.y,8,0,Math.PI*2);
+  ctx.stroke();
+
+  ctx.fillStyle = "#9d6900";
+  ctx.font = "bold 13px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("$",x,c.y+5);
+}
+
+function spawnObstacle() {
+  let lane = randomLane();
+  let type = Math.random() < .4 ? "tree" :
+             Math.random() < .6 ? "bush" : "log";
+
+  obstacles.push({
+    lane,
+    y: -50,
+    type,
+    hit: false
+  });
+}
+
+function spawnCoins() {
+  let lane = randomLane();
+  for(let i=0;i<5;i++) {
+    coinItems.push({
+      lane,
+      y: -i*48
+    });
+  }
+}
+
+function moveLeft() {
+  if(running && playerLane > 0) playerLane--;
+}
+
+function moveRight() {
+  if(running && playerLane < 2) playerLane++;
+}
+
+function slide() {
+  if(running) {
+    slideTime = 25;
+    slideSound();
+  }
+}
+
+function slide() {
+  if(running) slideTime = 25;
+}
+
+document.getElementById("left").onclick = moveLeft;
+document.getElementById("right").onclick = moveRight;
+document.getElementById("jump").onclick = jump;
+document.getElementById("slide").onclick = slide;
+
+document.addEventListener("keydown",e=>{
+  if(e.key === "ArrowLeft" || e.key === "a") moveLeft();
+  if(e.key === "ArrowRight" || e.key === "d") moveRight();
+  if(e.key === "ArrowUp" || e.key === " ") jump();
+  if(e.key === "ArrowDown") slide();
+});
+
+let touchX = 0;
+let touchY = 0;
+
+canvas.addEventListener("touchstart",e=>{
+  touchX = e.changedTouches[0].clientX;
+  touchY = e.changedTouches[0].clientY;
+},{passive:true});
+
+canvas.addEventListener("touchend",e=>{
+  let dx = e.changedTouches[0].clientX-touchX;
+  let dy = e.changedTouches[0].clientY-touchY;
+
+  if(Math.abs(dx)>30) {
+    if(dx<0) moveLeft();
+    else moveRight();
+  }
+
+  if(Math.abs(dy)>30) {
+    if(dy<0) jump();
+    else slide();
+  }
+},{passive:true});
+
+function resetGame() {
+  score = 0;
+  coins = 0;
+  speed = 1;
+  roadOffset = 0;
+  playerLane = 1;
+  jumpTime = 0;
+  slideTime = 0;
+  spawnTimer = 0;
+  coinTimer = 0;
+  obstacles = [];
+  coinItems = [];
+  gameOver = false;
+  running = true;
+  initAudio();
+if (soundEnabled) startEngine();
+
+  document.getElementById("menu").style.display = "none";
+}
+
+function endGame() {
+  running = false;
+  crashSound();
+stopEngine();
+  gameOver = true;
+
+  document.getElementById("menu").style.display = "flex";
+  document.querySelector("#menu h1").textContent = "GAME OVER!";
+  document.querySelector("#menu h2").textContent = "🏁 RACE FINISHED";
+  document.getElementById("start").textContent = "↻ PLAY AGAIN";
+  document.getElementById("result").textContent =
+    "Score: " + Math.floor(score) + " | Coins: " + coins;
+}
+
+document.getElementById("start").onclick = resetGame;
+
+function update() {
+  if(!running) return;
+
+  score += speed * .12;
+  speed = Math.min(3.2,1 + score/1800);
+
+  roadOffset += 5 * speed;
+  updateEngine();
+
+  if(jumpTime > 0) jumpTime--;
+  if(slideTime > 0) slideTime--;
+
+  spawnTimer++;
+  if(spawnTimer > Math.max(28,75-speed*13)) {
+    spawnObstacle();
+    spawnTimer = 0;
+  }
+
+  coinTimer++;
+  if(coinTimer > 105) {
+    spawnCoins();
+    coinTimer = 0;
+  }
+
+  decorations.forEach(d=>{
+    d.y += 5*speed;
+    if(d.y > H+50) {
+      d.y = -50;
+      d.x = Math.random();
+      d.side = Math.random()<.5?-1:1;
+      d.type = Math.random()<.5?"tree":"grass";
+    }
+  });
+
+  obstacles.forEach(o=>{
+    o.y += 5*speed;
+
+    if(!o.hit &&
+       o.lane === playerLane &&
+       Math.abs(o.y-(H-125)) < 36) {
+
+      let safe = (o.type === "log" && jumpTime > 0) ||
+                 (o.type === "bush" && jumpTime > 0) ||
+                 (o.type === "tree" && slideTime > 0);
+
+      if(!safe) {
+        endGame();
+      }
+      o.hit = true;
+    }
+  });
+
+  obstacles = obstacles.filter(o=>o.y < H+80);
+
+  coinItems.forEach(c=>{
+    c.y += 5*speed;
+
+    if(c.lane === playerLane &&
+       Math.abs(c.y-(H-125)) < 30) {
+      coins++;
+coinSound();
+c.y = H+500;
+    }
+  });
+
+  coinItems = coinItems.filter(c=>c.y<H+50);
+
+  document.getElementById("score").textContent = Math.floor(score);
+  document.getElementById("coins").textContent = coins;
+  document.getElementById("speed").textContent = speed.toFixed(1);
+}
+
+function draw() {
+  drawWater();
+  drawJungle();
+  drawRoad();
+
+  coinItems.forEach(drawCoin);
+  obstacles.forEach(drawObstacle);
+
+  let carY = H-125;
+  let carX = laneCenter(playerLane);
+
+  if(jumpTime > 0) carY -= 22;
+  if(slideTime > 0) {
+    ctx.save();
+    ctx.globalAlpha = .8;
+    drawCar(carX,carY);
+    ctx.restore();
+  } else {
+    drawCar(carX,carY);
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
